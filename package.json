@@ -1,0 +1,24 @@
+{
+  "name": "air-schema-visualizer",
+  "version": "0.1.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "webpack --config webpack.debug.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/artifishional/air-schema-visualizer.git"
+  },
+  "author": ".ai",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/artifishional/air-schema-visualizer/issues"
+  },
+  "homepage": "https://github.com/artifishional/air-schema-visualizer#readme",
+  "dependencies": {
+    "webpack": "^4.16.5",
+    "webpack-cli": "^3.1.0"
+  }
+}
