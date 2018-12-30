@@ -1,137 +1,175 @@
-const K = 10;
-const K2 = 0.000001;
-const {sqrt, max, sign, abs, min, pow} = Math;
-const sqr = x => x*x;
-const RESIST = 0.5;
+const AXIS = { x: 0, y: 0 };
+const DELTA_REQ = 2.5;
+const speed = 5;
 
-const DT = 1;
+const { pow, sqrt, abs, cos, sign, sin, PI, asin, max } = Math;
 
-let id = 0;
+function len([x0, y0], [x, y]) {
+    return sqrt( pow(x-x0, 2) + pow(y-y0, 2) )
+}
 
-const normalize = ( ([x, y], len) => [x/len,y/len] );
-const length = ([x, y]) => sqrt(sqr(x) + sqr(y));
+function norm( [ [x0, y0], [ x, y ] ] ) {
+    const length = len( [x0, y0], [ x, y ] );
+    return [(x - x0) / length, (y - y0) / length];
+}
 
 export default class Node {
 
-    constructor( area, { key, mass, speed, pos: [x, y] }, axis = false ) {
-        this.id = id++;
+    constructor( area, { key, round = 0 } ) {
+        this.obs = [];
+        this.item = [];
+        this._round = round;
+        this.minRadius = 200;
         this.key = key;
+        this._segment = 0;
+        area.push( this );
         this.area = area;
-        this._mass = mass;
-        this.speed = [...speed];
-        this.acc = [0, 0];
-        this.pos = [x, y];
-        this.children = [];
-        this.axis = axis;
+        this.pos = [0, 0];
+        this.mass = 50;
+        this.firstChild = this;
+        this.lastChild = this;
+        this.angle = 0;
     }
 
-    static tie(a, b) {
-        a.add(b);
-        b.add(a);
+    insert( node ) {
+        node.parent = this;
+        node.on( this );
+        if(!this.item.length) {
+            this.firstChild = node.firstChild;
+        }
+        this.lastChild = node.lastChild;
+        this.item.push( node );
+        node.round = this._round + 1;
     }
 
-    add(...children) {
-        this.children.push( ...children );
+    set firstChild( value ) {
+        if(value === this._firstChild) { return; }
+        this._firstChild && this._firstChild.off( this );
+        this._firstChild = value;
+        this._firstChild.on( this );
+        this.emt( { type: "firstNodeChanged", src: this }  );
     }
 
-    set mass(value) {
-        this._mass = value;
+    get firstChild( ) {
+        return this._firstChild;
     }
 
-    get mass() {
-        return this._mass;
+    set lastChild( value ) {
+        if(value === this._lastChild) { return; }
+        this._lastChild && this._lastChild.off( this );
+        this._lastChild = value;
+        this._lastChild.on( this );
+        this.emt( { type: "lastChildChanged", src: this } );
+    }
+
+    get lastChild( ) {
+        return this._lastChild;
+    }
+
+    emt( evt ) {
+        this.obs.map( obs => obs.handle(evt) );
+    }
+
+    handle( { type, src } ) {
+        if(type === "firstChildChanged") {
+            this.fisrtChild = src.fisrtChild;
+        }
+        else if(type === "lastChildChanged") {
+            this.lastChild = src.lastChild;
+        }
+    }
+
+    on(obs) {
+        this.obs.push( obs );
+    }
+
+    off(obs) {
+        this.obs.splice( this.obs.indexOf(obs), 1 );
+    }
+
+    get segment() {
+        return this._segment;
+    }
+
+    set segment(value) {
+        this._segment = value;
+    }
+
+    set round(value) {
+        this._round = value;
+        this.item.map( nd => nd.round = value + 1 );
+    }
+
+    get round() {
+        return this._round;
     }
 
     update() {
 
-        if(this.axis) return;
+        const last = this.area.extreme;
 
-        let repulsive  = this.area.reduce( ([vx, vy], node) => {
-            if(node !== this) {
-
-                const {mass, pos: [x, y]} = node;
-
-                const dt = [ - (x - this.pos[0]), - (y - this.pos[1]) ];
-                const len = length(dt);
-                const r = max( len, 2);
-                const n = K * pow(mass * this.mass, 4) / pow(r, 6);
-
-                const base = [ dt[0] / r, dt[1] / r ];
-
-                return [vx + base[0] * n, vy + base[1] * n];
-
-            }
-            else {
-                return [vx, vy];
-            }
-        }, [0, 0]);
+        const firstChildIndex = last.indexOf( this.firstChild );
+        const lastChildIndex = last.indexOf( this.lastChild );
 
 
-        let len = length(repulsive);
-        let base = normalize(repulsive, len);
-        len = min(15, length(repulsive));
-        repulsive = [
-            base[0] * len,
-            base[1] * len
-        ];
+        /**
+         *  Периметр правильного мноугоугольника,
+         *  вписанного в опружность R, с количетсвом сторон n
+         *  P = na = 2nR sin( PI / n )
+         */
 
-        this.repulsive = repulsive;
+        const count = this.area.filter( node => node.round === this.round ).length;
 
+        let radius;
+        let minAngle;
 
-        let gravity = this.children.reduce( ([ vx, vy ], node) => {
-
-            const {mass, pos: [x, y]} = node;
-
-            const dt = [ x - this.pos[0], y - this.pos[1]];
-            const len = length(dt);
-            const r = max( len, 2);
-            const t = K2 * r * r * r;
-
-            const base = [ dt[0] / r, dt[1] / r ];
-
-            return [vx + base[0] * t, vy + base[1] * t];
-
-        }, [0, 0] );
-
-        len = length(gravity);
-        if(len) {
-            base = normalize(gravity, len);
-            len = min(15, length(gravity));
-            gravity = [
-                base[0] * len,
-                base[1] * len
-            ];
+        if(count > 3) {
+            radius = max( this.minRadius * this.round,
+                count * this.mass * DELTA_REQ / 2 /count / sin( PI / count )
+            );
         }
         else {
-            gravity = [ 0, 0 ];
+            radius = this.minRadius * this.round;
         }
 
-
-
-
-        this.acc = [
-            (repulsive[0] + gravity[0] - this.speed[0] * RESIST) / this.mass,
-            (repulsive[1] + gravity[1] - this.speed[1] * RESIST) / this.mass,
-        ];
-
-        if(isNaN(this.acc[0])) {
-debugger;
+        if(count > 1) {
+            minAngle = asin(this.mass * DELTA_REQ / 2 / radius) * 2;
+        }
+        else {
+            minAngle = 0;
         }
 
-        //if(abs(this.acc[0]) < 0.15) this.acc[0] = 0;
-        //if(abs(this.acc[1]) < 0.15) this.acc[1] = 0;
+        let angle;
 
-        this.speed = [
-            this.speed[0] + this.acc[0] * DT,
-            this.speed[1] + this.acc[1] * DT,
+        if(this.item.length) {
+            angle = this.item[0].angle + (this.item.slice(-1)[0].angle - this.item[0].angle) / 2;
+        }
+        else {
+            angle = - (count - 1) * minAngle / 2 + minAngle * (firstChildIndex + (lastChildIndex - firstChildIndex) / 2);
+        }
+
+        this.angle = angle;
+
+        const req = [
+            cos( angle - PI/2 ) * radius,
+            - sin( angle - PI/2 ) * radius
         ];
 
-        if(abs(this.speed[0]) < 0.1) this.speed[0] = 0;
-        if(abs(this.speed[1]) < 0.1) this.speed[1] = 0;
+        if(this.key === "a") {
+           // debugger;
+        }
+
+        const cur = this.pos;
+        const dt = [
+            req[0] - cur[0],
+            req[1] - cur[1],
+        ];
+
+        const normalized = norm( [cur, req] );
 
         this.pos = [
-            this.pos[0] + this.speed[0] * DT + this.acc[0] * sqr(DT) / 2,
-            this.pos[1] + this.speed[1] * DT + this.acc[1] * sqr(DT) / 2
+            abs(dt[0]) > speed ? cur[0] + normalized[0] * speed : req[0],
+            abs(dt[1]) > speed ? cur[1] + normalized[1] * speed : req[1],
         ];
 
     }
