@@ -1,43 +1,116 @@
 import svg from "./svg"
+const { PI, random } = Math;
+const ROUND_WIDTH = 20;
+const SPEED = 0.05;
+import * as d3 from "d3"
+
+let EN_COUNTERED = 0;
+
+const COLORS = {};
+
+function gcolor({ key }) {
+    COLORS[key] = COLORS[key] || `rgb(${random()*256|0},${random()*256|0},${random()*256|0})`;
+    return COLORS[key];
+}
 
 export default class Node {
 
-    constructor(model, scene) {
-        this.model = model;
-        this.scene = scene;
-        this.g = svg("g", { },
-            this.ellipse = svg( "ellipse", { rx: 50, ry: 50, fill: "#0026ff" } ),
-            svg( "text", { fill: "#fff", "alignment-baseline": "middle", "text-anchor": "middle", text: model.axis ? "O" : model.key } )
-        );
-        this._links = [];
+    tween(arc, startAngle, endAngle) {
+        return (d) => {
+            const iStartAngle = d3.interpolate(d.startAngle, startAngle);
+            const iEndAngle = d3.interpolate(d.endAngle, endAngle);
+            return (t) => {
+                d.startAngle = iStartAngle(t);
+                d.endAngle = iEndAngle(t);
+                return arc(d);
+            };
+        };
     }
 
-    get links() {
-        const added =
-            new Array(this.model.item.length - this._links.length)
-                .fill(0)
-                .map( () => svg( "line", { style: { stroke: "#0026ff", strokeWidth: 2 } } ) );
-        this._links.push( ...added );
-        this.scene.lines.append( ...added );
-        return this._links;
+    constructor(model, scene) {
+        this.model = model;
+
+        const color = gcolor(model);
+
+        this.g = svg("g", { },
+
+            this.path = svg( "path", { fill: color } ),
+
+            svg("defs", {},
+                this.path2 = svg( "path", {
+                    stroke: "#000", strokeWidth: 2, id: "ID" + ++EN_COUNTERED, fill: "#000"
+                } ),
+            ),
+
+            svg( "text", { },
+                this.text = svg( "textPath", {
+                    dy: -200,
+                    side: "left",
+                    style: { textAnchor: "middle" },
+                    startOffset: "75%",
+                    text: this.model.key,
+                    href: "#ID" + EN_COUNTERED,
+                }),
+            ),
+        );
+
+        this.animate = d3
+            .select(this.path)
+            .datum({ endAngle: 0, startAngle: 0 });
+
+        this.animate2 = d3
+            .select(this.path2)
+            .datum({ endAngle: 0, startAngle: 0 });
+
+        this.__arc = d3.arc()
+            .padAngle(0.01)
+            .cornerRadius(2);
+
+        this.__arc2 = d3.arc();
+
     }
 
     paint() {
+/*
+        if(!this.model.isHead && this.model.item.length < 2) {
+            return;
+        }
+*/
 
-        const [x, y] = this.model.pos;
+        if(this.model.item.length) {
+            this.text.textContent = this.model.key;
+        }
+        else {
+            this.text.textContent = this.model.key.substring(0, 2);
+        }
 
-        this.links.map( (link, i) => {
-            link.setAttribute( "x1", x );
-            link.setAttribute( "y1", y );
-            link.setAttribute( "x2", this.model.item[i].pos[0] );
-            link.setAttribute( "y2", this.model.item[i].pos[1] );
-        } );
+        const perSector = PI * 2 / this.model.area.ultimate;
+        const mass = this.model.mass;
 
-        if(this.model.axis) this.ellipse.setAttribute("fill", "#26aaff");
-        this.ellipse.setAttribute("rx", this.model.mass);
-        this.ellipse.setAttribute("ry", this.model.mass);
+        const reqStartAngle = this.model.startMass * perSector;
+        const reqEndAngle = (this.model.startMass + mass) * perSector;
 
-        this.g.setAttribute( "transform", `translate(${x|0},${y|0})` );
+        const roundStart = this.model.isHead ? this.model.round: this.model.round + 1;
+        const roundEnd = this.model.isHead ? this.model.area.maxRound + 1 : this.model.round + 2;
+
+        this.__arc = this.__arc
+            .innerRadius(roundStart * ROUND_WIDTH + 0.35)
+            .outerRadius(roundEnd * ROUND_WIDTH - 0.35);
+
+        this.__arc2 = this.__arc2
+            .innerRadius(( roundStart + (roundEnd - roundStart)*0.6 ) * ROUND_WIDTH)
+            .outerRadius(( roundStart + (roundEnd - roundStart)*0.6 ) * ROUND_WIDTH);
+
+        this.animate
+            .transition()
+            .duration(1000)
+            .attrTween( "d", this.tween( this.__arc, reqStartAngle, reqEndAngle ) );
+
+        this.animate2
+            .transition()
+            .duration(1000)
+            .attrTween( "d", this.tween( this.__arc2, reqStartAngle, reqEndAngle ) )
+
     }
 
 }

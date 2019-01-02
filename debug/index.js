@@ -1,28 +1,6 @@
 import { NodeModel as Node, NodeView } from  "../src"
 import svg from "../src/svg"
-const { max } = Math;
-
-function lasted(exist, vertex) {
-    if(vertex.item.length) {
-        return vertex.item.reduce( lasted, exist );
-    }
-    return [ ...exist, vertex ];
-}
-
-class Area extends Array {
-
-    constructor() {
-        super();
-        this.extreme = [];
-        this.maxRound = 0;
-    }
-
-    update() {
-        this.extreme = lasted( [], this[0] );
-        this.maxRound = max( ...this.extreme.map( ({ round }) => round ) );
-    }
-
-}
+import Area from "../src/area"
 
 const area = new Area();
 
@@ -30,48 +8,60 @@ window.area = area;
 
 const a = new Node( area, { key: "a" } );
 
-
 const b = new Node( area, { key: "b" } );
 a.insert(b);
 
 const c = new Node( area, { key: "c" } );
 a.insert(c);
 
+setTimeout( () => {
+
+    const l = new Node( area, { key: "l" } );
+    a.insert(l);
+
+}, 5000 );
+
+
 const d = new Node( area, { key: "d" } );
-c.insert(d);
+a.insert(d);
 
 const e = new Node( area, { key: "e" } );
-c.insert(e);
+a.insert(e);
 
 const f = new Node( area, { key: "f" } );
-c.insert(f);
+a.insert(f);
+
 
 const g = new Node( area, { key: "g" } );
-c.insert(g);
+f.insert(g);
 
 const h = new Node( area, { key: "h" } );
-b.insert(h);
+f.insert(h);
 
 const i = new Node( area, { key: "i" } );
-b.insert(i);
+c.insert(i);
 
-const j = new Node( area, { key: "j" } );
-e.insert(j);
+setTimeout( () => {
 
-const k = new Node( area, { key: "k" } );
-e.insert(k);
+    const j = new Node( area, { key: "j" } );
+    c.insert(j);
 
-const l = new Node( area, { key: "l" } );
-a.insert(l);
+    setTimeout( () => {
 
-const m = new Node( area, { key: "m" } );
-l.insert(m);
+        const k = new Node( area, { key: "k" } );
+        a.insert(k);
 
-const n = new Node( area, { key: "n" } );
-a.insert(n);
+        setTimeout( () => {
 
-const o = new Node( area, { key: "o" } );
-n.insert(o);
+            Array(25).fill(0).map( (_, index)=> {
+                j.insert(new Node( area, { key: "m"+index } ));
+            } );
+
+        }, 2500 );
+
+    }, 2500 );
+
+}, 2500 );
 
 
 (function frame() {
@@ -85,7 +75,11 @@ window.addEventListener("load", () => {
 
     const scenes = {};
 
-    const scene = svg( "svg", { viewBox: "-1000 -1000 2000 2000" },
+    const scene = svg( "svg", { viewBox: "-150 -150 300 300" },
+
+        //svg( "ellipse", { "rx": 45, "ry": 45, cx: "0", cy: "0", fill: "none", stroke: "#000" } ),
+        //svg( "ellipse", { "rx": 70, "ry": 70, cx: "0", cy: "0", fill: "none", stroke: "#000" } ),
+
         scenes.lines = svg( "g" ),
         scenes.units = svg( "g" ),
     );
@@ -94,8 +88,8 @@ window.addEventListener("load", () => {
 
     const views = [];
 
-    (function frame() {
-        requestAnimationFrame( frame );
+    setTimeout(function frame() {
+        setTimeout( frame, 2000 );
 
         area.map( model => {
             if(!views.find( view => view.model === model ))  {
@@ -106,6 +100,6 @@ window.addEventListener("load", () => {
         } );
 
         views.map( view => view.paint() );
-    })();
+    }, 2000);
 
 });

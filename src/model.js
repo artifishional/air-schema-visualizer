@@ -15,20 +15,30 @@ function norm( [ [x0, y0], [ x, y ] ] ) {
 
 export default class Node {
 
-    constructor( area, { key, round = 0 } ) {
+    constructor( area, { key, round = 0, head = false } ) {
         this.obs = [];
-        this.item = [];
+        this.item = [  ];
+        this.isHead = head;
         this._round = round;
-        this.minRadius = 200;
+        this.startMass = 0;
         this.key = key;
         this._segment = 0;
         area.push( this );
         this.area = area;
-        this.pos = [0, 0];
         this.mass = 50;
         this.firstChild = this;
         this.lastChild = this;
-        this.angle = 0;
+        /*if(!head) {
+            this.insert( new Node( area, { key, round: round +1, head: true } ) );
+        }*/
+    }
+
+    head() {
+        let parent = null;
+        while (this.parent) {
+            parent = this.parent;
+        }
+        return parent;
     }
 
     insert( node ) {
@@ -106,71 +116,22 @@ export default class Node {
 
     update() {
 
-        const last = this.area.extreme;
-
-        const firstChildIndex = last.indexOf( this.firstChild );
-        const lastChildIndex = last.indexOf( this.lastChild );
-
-
-        /**
-         *  Периметр правильного мноугоугольника,
-         *  вписанного в опружность R, с количетсвом сторон n
-         *  P = na = 2nR sin( PI / n )
-         */
-
-        const count = this.area.filter( node => node.round === this.round ).length;
-
-        let radius;
-        let minAngle;
-
-        if(count > 3) {
-            radius = max( this.minRadius * this.round,
-                count * this.mass * DELTA_REQ / 2 /count / sin( PI / count )
-            );
-        }
-        else {
-            radius = this.minRadius * this.round;
-        }
-
-        if(count > 1) {
-            minAngle = asin(this.mass * DELTA_REQ / 2 / radius) * 2;
-        }
-        else {
-            minAngle = 0;
-        }
-
-        let angle;
-
         if(this.item.length) {
-            angle = this.item[0].angle + (this.item.slice(-1)[0].angle - this.item[0].angle) / 2;
+            this.mass = this.item.reduce( (acc, { mass }) => acc + mass, 0 );
         }
         else {
-            angle = - (count - 1) * minAngle / 2 + minAngle * (firstChildIndex + (lastChildIndex - firstChildIndex) / 2);
+            this.mass = 1;
         }
 
-        this.angle = angle;
-
-        const req = [
-            cos( angle - PI/2 ) * radius,
-            - sin( angle - PI/2 ) * radius
-        ];
-
-        if(this.key === "a") {
-           // debugger;
+        if(this.parent) {
+            this.startMass =
+                this.parent.item
+                    .slice(0, this.parent.item.indexOf( this ))
+                    .reduce( (acc, { mass }) => acc + mass, this.parent.startMass )
         }
-
-        const cur = this.pos;
-        const dt = [
-            req[0] - cur[0],
-            req[1] - cur[1],
-        ];
-
-        const normalized = norm( [cur, req] );
-
-        this.pos = [
-            abs(dt[0]) > speed ? cur[0] + normalized[0] * speed : req[0],
-            abs(dt[1]) > speed ? cur[1] + normalized[1] * speed : req[1],
-        ];
+        else {
+            this.startMass = 0;
+        }
 
     }
 
